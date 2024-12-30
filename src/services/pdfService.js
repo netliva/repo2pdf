@@ -1,7 +1,7 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
-const { getThemeColors, highlightCode } = require('../utils/highlighter');
+const { highlightCode } = require('../utils/highlighter');
 const { getFileMetadata } = require('./fileService');
 const { getFileHistory } = require('./gitService');
 const { updateProgress, updateCurrentFile } = require('../utils/progress');
@@ -15,6 +15,12 @@ const FONTS = {
   normal: path.join(__dirname, '../../assets/fonts/Roboto-Regular.ttf'),
   bold: path.join(__dirname, '../../assets/fonts/Roboto-Bold.ttf'),
   mono: path.join(__dirname, '../../assets/fonts/RobotoMono-Regular.ttf')
+};
+
+// Varsayılan renkler
+const COLORS = {
+  text: '#000000',
+  background: '#ffffff'
 };
 
 /**
@@ -46,21 +52,18 @@ async function createPdf({ files, destination, workingDir, options, readFile }) 
   const stream = fs.createWriteStream(destination);
   doc.pipe(stream);
 
-  // Tema renklerini al
-  const colors = getThemeColors(options.theme);
-
   // Başlık sayfası
   doc.addPage();
-  createTitlePage(doc, workingDir, colors);
+  createTitlePage(doc, workingDir);
 
   // İçindekiler
   doc.addPage();
-  await createTableOfContents(doc, files, workingDir, colors);
+  await createTableOfContents(doc, files, workingDir);
 
   // Git geçmişi
   if (options.gitHistory) {
     doc.addPage();
-    await createGitHistory(doc, options.gitHistory, colors);
+    await createGitHistory(doc, options.gitHistory);
   }
 
   // Dosyaları batch'ler halinde işle
@@ -68,7 +71,7 @@ async function createPdf({ files, destination, workingDir, options, readFile }) 
     const batch = files.slice(i, i + BATCH_SIZE);
     processedFiles += batch.length;
     updateProgress(processedFiles, totalFiles);
-    await processBatch(doc, batch, workingDir, colors, options, readFile);
+    await processBatch(doc, batch, workingDir, options, readFile);
     
     // Belleği temizle
     doc.flushPages();
@@ -85,39 +88,38 @@ async function createPdf({ files, destination, workingDir, options, readFile }) 
 /**
  * Dosya batch'ini işler
  */
-async function processBatch(doc, files, workingDir, colors, options, readFile) {
+async function processBatch(doc, files, workingDir, options, readFile) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const relativePath = path.relative(workingDir, file);
     updateCurrentFile(relativePath);
     doc.addPage();
-    await createFileSection(doc, file, workingDir, colors, options, readFile);
+    await createFileSection(doc, file, workingDir, options, readFile);
   }
 }
 
 /**
  * Başlık sayfası oluşturur
  */
-function createTitlePage(doc, workingDir, colors) {
+function createTitlePage(doc, workingDir) {
   doc.font('Roboto-Bold')
      .fontSize(24)
-     .fillColor(colors.text)
+     .fillColor(COLORS.text)
      .text(i18n.t('pdf.title'), { align: 'center' })
      .moveDown(2)
      .font('Roboto')
      .fontSize(16)
      .text(i18n.t('pdf.metadata.source') + ': ' + path.basename(workingDir), { align: 'center' })
      .moveDown()
-     .text(i18n.t('pdf.metadata.generated') + ': ' + new Date().toLocaleString(i18n.getCurrentLocale() === 'tr' ? 'tr-TR' : 'en-US'), { align: 'center' })
-     .addPage();
+     .text(i18n.t('pdf.metadata.generated') + ': ' + new Date().toLocaleString(i18n.getCurrentLocale() === 'tr' ? 'tr-TR' : 'en-US'), { align: 'center' });
 }
 
 /**
  * İçindekiler sayfası oluşturur
  */
-async function createTableOfContents(doc, files, workingDir, colors) {
+async function createTableOfContents(doc, files, workingDir) {
   doc.fontSize(16)
-     .fillColor(colors.text)
+     .fillColor(COLORS.text)
      .text(i18n.t('pdf.tableOfContents'), { align: 'center' })
      .moveDown();
 
@@ -126,16 +128,14 @@ async function createTableOfContents(doc, files, workingDir, colors) {
     doc.fontSize(12)
        .text(relativePath, { link: relativePath, underline: true });
   }
-
-  doc.addPage();
 }
 
 /**
  * Git geçmişi sayfası oluşturur
  */
-function createGitHistory(doc, history, colors) {
+function createGitHistory(doc, history) {
   doc.fontSize(16)
-     .fillColor(colors.text)
+     .fillColor(COLORS.text)
      .text(i18n.t('pdf.gitHistory'), { align: 'center' })
      .moveDown();
 
@@ -147,14 +147,12 @@ function createGitHistory(doc, history, colors) {
        .text(i18n.t('pdf.metadata.message') + ': ' + commit.message)
        .moveDown();
   }
-
-  doc.addPage();
 }
 
 /**
  * Dosya bölümü oluşturur
  */
-async function createFileSection(doc, file, workingDir, colors, options, readFile) {
+async function createFileSection(doc, file, workingDir, options, readFile) {
   const relativePath = path.relative(workingDir, file);
   const metadata = await getFileMetadata(file);
   const gitInfo = options.commitInfo ? await getFileHistory(file) : null;
@@ -162,7 +160,7 @@ async function createFileSection(doc, file, workingDir, colors, options, readFil
   // Dosya başlığı
   doc.font('Roboto-Bold')
      .fontSize(16)
-     .fillColor(colors.text)
+     .fillColor(COLORS.text)
      .text(relativePath, { align: 'center' })
      .moveDown();
 
@@ -186,23 +184,35 @@ async function createFileSection(doc, file, workingDir, colors, options, readFil
 
   // Dosya içeriği
   const content = await readFile(file);
+  const extension = path.extname(file).slice(1);
+  const lines = highlightCode(content, extension);
+
   doc.font('RobotoMono')
-     .fontSize(8)
-     .fillColor(colors.text);
+     .fontSize(8);
 
-  // İçeriği satırlara böl
-  const lines = content.split('\n');
-  
-  // Satırları işle ve yazdır
-  lines.forEach((line, index) => {
+
+
+  // Her satırı işle
+  lines.forEach((tokens, lineNumber) => {
+    // Satır numarası
     if (options.lineNumbers) {
-      doc.text(`${index + 1}. ${line}`);
-    } else {
-      doc.text(line);
+      doc.fillColor(COLORS.text)
+         .text(`${lineNumber + 1}. `, { continued: true });
     }
-  });
+    
 
-  doc.addPage();
+    // Satırdaki token'ları yazdır
+    tokens.forEach((token, index) => {
+        if (token.text.trim()) {
+            doc.fillColor(token.fillColor)
+            .text(token.text, { continued:true });
+        }
+    });
+
+    // Satır sonu
+    doc.text(' ');
+  });
+//   doc.addPage();
 }
 
 /**
