@@ -35,7 +35,7 @@ console.error = function(...args) {
     }
     
     // Bilinmeyen bir dil modülü hatası ise, daha açıklayıcı bir mesaj göster
-    console.log(chalk.yellow(`⚠️  ${knownIssues.languageModules[extension] || 'Dosya'} işlenirken dil modülü atlandı: ${extension}`));
+    console.log(chalk.yellow(`\n  ⚠️  ${knownIssues.languageModules[extension] || 'Dosya'} işlenirken dil modülü atlandı: ${extension}`));
     return;
   }
 
