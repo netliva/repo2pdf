@@ -31,6 +31,7 @@ async function createPdf({ files, destination, workingDir, options, readFile }) 
   let processedFiles = 0;
 
   const doc = new PDFDocument({
+    lang: 'tr-TR',
     size: 'A4',
     margin: 50,
     bufferPages: true,
