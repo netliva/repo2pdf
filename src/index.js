@@ -59,8 +59,6 @@ async function convertToPdf(source, destination, options = {}) {
           global.gc && global.gc();
         }
         return content;
-
-        //   return highlightCode(content, path.extname(filePath).slice(1));
       }
     });
 
